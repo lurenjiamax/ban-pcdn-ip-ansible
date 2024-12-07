@@ -1,0 +1,46 @@
+---
+- name: Manage IP blocking using UFW
+  become: true
+  vars:
+    block_script: "{{ ufw_block_script }}"
+    unblock_script: "{{ ufw_unblock_script }}"
+  block:
+    - name: Download CIDR file from URL
+      ansible.builtin.get_url:
+        url: "{{ cidr_file_url }}"
+        dest: "{{ cidr_file }}"
+        mode: '0644'
+
+    - name: Filter valid CIDR lines (ignore comments and empty lines)
+      ansible.builtin.shell: |
+        grep -vE '^\s*(#|$)' {{ cidr_file }} > {{ cidr_file }}.filtered
+
+    - name: Check if unblock script exists, apply it if it does
+      ansible.builtin.stat:
+        path: "{{ unblock_script }}"
+      register: unblock_script_stat
+
+    - name: Apply iptables unblock script if it exists
+      ansible.builtin.shell: "{{ unblock_script }}"
+      when: unblock_script_stat.stat.exists
+      
+    - name: Generate UFW block script
+      ansible.builtin.template:
+        src: ufw_block.sh.j2
+        dest: "{{ block_script }}"
+        mode: '0755'
+        # Create dir if it doesn't exist
+        state: directory
+
+    - name: Generate UFW unblock script
+      ansible.builtin.template:
+        src: ufw_unblock.sh.j2
+        dest: "{{ unblock_script }}"
+        mode: '0755'
+
+    - name: Apply UFW block script
+      ansible.builtin.shell: "{{ block_script }}"
+
+    - name: Enable UFW
+      ufw:
+        state: enabled

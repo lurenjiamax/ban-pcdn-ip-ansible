@@ -1,0 +1,6 @@
+#!/bin/bash
+# UFW Block Script
+set -e
+while read -r cidr; do
+    ufw deny from "$cidr"
+done < {{ cidr_file }}.filtered

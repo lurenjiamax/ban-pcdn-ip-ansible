@@ -1,0 +1,47 @@
+---
+- name: Ban PDCN IP
+  hosts: all
+  become: yes
+  vars: 
+    firewall: auto # select from {ufw, csf, iptables}
+    cidr_file_url: https://raw.githubusercontent.com/unclemcz/ban-pcdn-ip/refs/heads/main/ipdb.txt
+    cidr_file: /tmp/cidr_list.txt
+
+    # Scripts will be generated in the following paths on the remote server
+    output_folder: ./ban_pdcn
+    ufw_block_script: "{{ output_folder }}/ufw_block.sh"
+    ufw_unblock_script: "{{ output_folder }}/ufw_unblock.sh"
+
+    iptables_block_script: "{{ output_folder }}/iptables_block.sh"
+    iptables_unblock_script: "{{ output_folder }}/iptables_unblock.sh"
+
+    csf_deny_file: /etc/csf/csf.deny
+  tasks:
+    - name: Determine firewall
+      ansible.builtin.shell: |
+        if [ -x "$(command -v ufw)" ]; then
+          echo "ufw"
+        elif [ -x "$(command -v csf)" ]; then
+          echo "csf"
+        elif [ -x "$(command -v iptables)" ]; then
+          echo "iptables"
+        else
+          echo "unknown"
+        fi
+      register: firewall
+      changed_when: false
+
+    - name: Create output folder for script and pdcn 
+      ansible.builtin.file:
+        path: "{{ output_folder }}"
+        state: directory
+
+    - include_tasks: tasks/ufw.yml
+      when: firewall.stdout == "ufw"
+    
+    - include_tasks: tasks/csf.yml
+      when: firewall.stdout == "csf"
+
+    - include_tasks: tasks/iptables.yml
+      when: firewall.stdout == "iptables"
+    

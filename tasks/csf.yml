@@ -1,0 +1,22 @@
+- name: Manage IP blocking using CSF
+  become: true
+  block:
+    - name: Download CIDR file from URL
+      ansible.builtin.get_url:
+        url: "{{ cidr_file_url }}"
+        dest: "{{ cidr_file }}"
+        mode: '0644'
+
+    - name: Filter valid CIDR lines (ignore comments and empty lines)
+      ansible.builtin.shell: |
+        grep -vE '^\s*(#|$)' {{ cidr_file }} > {{ cidr_file }}.filtered
+
+    - name: Add CIDR ranges to CSF deny list
+      lineinfile:
+        path: "{{ csf_deny_file }}"
+        line: "deny from {{ item }}"
+        state: present
+      loop: "{{ lookup('file', cidr_file + '.filtered').splitlines() }}"
+
+    - name: Reload CSF
+      shell: csf -r
